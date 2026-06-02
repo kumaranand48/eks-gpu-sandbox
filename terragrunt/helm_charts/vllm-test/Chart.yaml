@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vllm-test
+description: Throwaway vLLM (Qwen2.5-7B-Instruct-AWQ) inference test workload with graceful preStop drain.
+type: application
+version: 0.1.0
+appVersion: "0.21.0"

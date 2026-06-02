@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-scripts
+  labels:
+    app: {{ .Release.Name }}
+data:
+  drain.sh: |
+    #!/bin/bash
+    # preStop drain hook for vLLM. The kubelet runs this BEFORE sending SIGTERM,
+    # so vLLM keeps serving in-flight requests while we wait here.
+    #   MIN_DRAIN_SECONDS  always stay alive at least this long (endpoint
+    #                      deregistration propagation + long generations).
+    #   MAX_DRAIN_SECONDS  hard cap; MUST stay < terminationGracePeriodSeconds.
+    MIN_DRAIN_SECONDS={{ .Values.drain.minSeconds }}
+    MAX_DRAIN_SECONDS={{ .Values.drain.maxSeconds }}
+    METRICS_URL="http://localhost:{{ .Values.server.port }}/metrics"
+    POLL_INTERVAL={{ .Values.drain.pollInterval }}
+
+    start=$(date +%s)
+
+    get_running() {
+      # Prometheus gauge:  vllm:num_requests_running{...} <float>
+      curl -s --max-time 2 "$METRICS_URL" 2>/dev/null \
+        | awk '/^vllm:num_requests_running/ {v=$NF} END {printf "%d", v+0}'
+    }
+
+    echo "[drain] start; min=${MIN_DRAIN_SECONDS}s cap=${MAX_DRAIN_SECONDS}s"
+    while true; do
+      elapsed=$(( $(date +%s) - start ))
+      running=$(get_running)
+
+      if [ "$elapsed" -ge "$MAX_DRAIN_SECONDS" ]; then
+        echo "[drain] cap reached at ${elapsed}s (running=${running}); exiting"
+        break
+      fi
+      if [ "$elapsed" -ge "$MIN_DRAIN_SECONDS" ] && [ "${running:-0}" -eq 0 ]; then
+        echo "[drain] drained at ${elapsed}s (running=0); exiting"
+        break
+      fi
+      echo "[drain] t=${elapsed}s running=${running}"
+      sleep "$POLL_INTERVAL"
+    done

@@ -1,0 +1,45 @@
+replicaCount: 1
+
+image:
+  repository: vllm/vllm-openai
+  tag: "v0.21.0"
+  pullPolicy: IfNotPresent
+
+model:
+  name: Qwen/Qwen2.5-7B-Instruct-AWQ
+  quantization: awq_marlin
+  maxModelLen: 8192
+  gpuMemoryUtilization: "0.9"
+
+server:
+  port: 8000
+
+service:
+  port: 8000
+
+# Placement onto the L4 GPU node (GFD label + node taint toleration).
+gpu:
+  productLabel: NVIDIA-L4
+  tolerationKey: nvidia.com/gpu
+  tolerationValue: "true"
+  tolerationEffect: NoSchedule
+  count: 1
+
+# Graceful shutdown. drain.maxSeconds MUST stay < termination.gracePeriodSeconds.
+termination:
+  gracePeriodSeconds: 90
+drain:
+  minSeconds: 75
+  maxSeconds: 85
+  pollInterval: 2
+
+# Startup gating. initialDelaySeconds is the scale-up floor (Running -> Ready >= this).
+startup:
+  initialDelaySeconds: 75
+  periodSeconds: 5
+  failureThreshold: 30
+readiness:
+  periodSeconds: 10
+
+pdb:
+  maxUnavailable: 1

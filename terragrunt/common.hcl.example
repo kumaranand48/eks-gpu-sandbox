@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SETUP: copy this file to `common.hcl` (gitignored), then set your AWS account ID
+# in the state-bucket name below. Adjust region/profile if needed. Then:
+#   make init   # auto-creates the S3 state bucket + lock table
+#   make up     # apply the stack + write kubeconfig
+# ─────────────────────────────────────────────────────────────────────────────
+locals {
+  region  = "us-west-2"
+  profile = "default"
+  bucket  = "infra-sandbox-tfstate-<YOUR_AWS_ACCOUNT_ID>-us-west-2"
+  # State key derives from the env dir name: sandbox/ -> terraform/sandbox.tfstate
+  key = "terraform/${path_relative_to_include()}.tfstate"
+}
+
+# Paths exposed to every env as TF inputs (vendored Helm charts live here).
+inputs = {
+  helm_charts_dir = "${get_parent_terragrunt_dir()}/helm_charts"
+}
+
+remote_state {
+  backend = "s3"
+  config = {
+    bucket         = local.bucket
+    key            = local.key
+    region         = local.region
+    profile        = local.profile
+    encrypt        = true
+    dynamodb_table = "infra-sandbox-tflock"
+  }
+}

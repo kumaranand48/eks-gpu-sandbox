@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.termination.gracePeriodSeconds }}
+      nodeSelector:
+        nvidia.com/gpu.product: {{ .Values.gpu.productLabel }}
+      tolerations:
+        - key: {{ .Values.gpu.tolerationKey }}
+          operator: Equal
+          value: "{{ .Values.gpu.tolerationValue }}"
+          effect: {{ .Values.gpu.tolerationEffect }}
+      containers:
+        - name: vllm
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --model
+            - {{ .Values.model.name }}
+            - --quantization
+            - {{ .Values.model.quantization }}
+            - --max-model-len
+            - "{{ .Values.model.maxModelLen }}"
+            - --gpu-memory-utilization
+            - "{{ .Values.model.gpuMemoryUtilization }}"
+            - --port
+            - "{{ .Values.server.port }}"
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.gpu.count }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.server.port }}
+            initialDelaySeconds: {{ .Values.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.startup.periodSeconds }}
+            failureThreshold: {{ .Values.startup.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.server.port }}
+            periodSeconds: {{ .Values.readiness.periodSeconds }}
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/bash", "/scripts/drain.sh"]
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ .Release.Name }}-scripts
+            defaultMode: 0755

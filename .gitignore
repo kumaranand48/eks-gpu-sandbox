@@ -1,0 +1,13 @@
+.terraform/
+.terragrunt-cache/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.env
+.DS_Store
+
+# Personal / not-for-release — kept local; the repo ships common.hcl.example instead
+common.hcl
+CLAUDE.md
+docs/
